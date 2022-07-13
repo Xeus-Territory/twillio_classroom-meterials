@@ -11,7 +11,7 @@
 ---
 ## THE FIRST SIGHT INTO THE PROJECT. LOOK USE CASE AND WE CAN COVER WHAT WE CAN DO FO THIS
 
-<img src="IMG/SESNUse-case.drawio.png" width = "1280" height = "720">\
+<img src="IMG/SESNUse-case.drawio.png" width = "1280" height = "720">
 
 ---
 
