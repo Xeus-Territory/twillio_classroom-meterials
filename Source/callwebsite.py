@@ -1,17 +1,24 @@
 from flask import Flask, render_template, request, abort
 from flask_restful import Api
-from dotenv import load_dotenv
+from twilio.rest import Client
+from twilio.base.exceptions import TwilioRestException
 from twilio.jwt.access_token import AccessToken
-from twilio.jwt.access_token.grants import VideoGrant
+from twilio.jwt.access_token.grants import VideoGrant, ChatGrant
 from env import TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET
 
+twillio_client = Client(TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_ACCOUNT_SID)
+
 app = Flask(__name__)
+
+def get_chatroom(name):
+    for conversation in twillio_client.conversations.conversations.stream():
+        if conversation.friendly_name == name:
+            return conversation
+    
+    return twillio_client.conversations.conversations.create(friendly_name=name)
+
         
 @app.route('/')
-def index():
-    return '<h1>Video Chat Room SESN</h1>'
-
-@app.route('/meeting')
 def meetingCreate():
     return render_template('index.html')
 
@@ -21,9 +28,19 @@ def login():
     if not username:
         abort(401)
     
+    conversation = get_chatroom("my_room")
+    try:
+        conversation.participants.create(identity=username)
+    except TwilioRestException as e:
+        if e.status != 409:
+            raise
+        
     token = AccessToken(TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, identity=username)
     token.add_grant(VideoGrant(room='my_room'))
+    token.add_grant(ChatGrant(service_sid=conversation.chat_service_sid))
     
-    return {'token': token.to_jwt()}
+    return {'token': token.to_jwt(),
+            'conversation_sid': conversation.sid}
 
-app.run(debug=True)
+if __name__ == '__main__':
+    app.run(debug=True)

@@ -29,48 +29,58 @@ const addLocalVideo = async () => {
 const connectButtonHandler = async () => {
   event.preventDefault();
   if (!connected) {
-    const username = usernameInput.value;
+    let username = usernameInput.value;
     if (!username) {
-      alert("Enter your name before connecting");
+      alert('Enter your name before connecting');
       return;
     }
     button.disabled = true;
-    button.innerHTML = "Connecting...";
-    try {
-      await connect(username);
-      button.innerHTML = "Leave call";
+    button.innerHTML = 'Connecting...';
+    connect(username).then(() => {
+      button.innerHTML = 'Leave call';
       button.disabled = false;
       shareScreen.disabled = false;
-    }
-    catch
-    {
+    }).catch(() => {
       alert('Connection failed. Is the backend running?');
       button.innerHTML = 'Join call';
       button.disabled = false;
-    }
+    });
   }
   else {
     disconnect();
-    button.innerHTML = "Join call";
-    shareScreen.innerHTML = "Share screen";
-    shareScreen.disabled = true;
+    button.innerHTML = 'Join call';
     connected = false;
+    shareScreen.innerHTML = 'Share screen';
+    shareScreen.disabled = true;
   }
 };
 
 const connect = async (username) => {
-  const response = await fetch('/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 'username': username }),
+  let promise = new Promise((resolve, reject) => {
+    // get a token from the back end
+    let data;
+    fetch('/login', {
+      method: 'POST',
+      body: JSON.stringify({ 'username': username })
+    }).then(res => res.json()).then(_data => {
+      // join video call
+      data = _data;
+      return Twilio.Video.connect(data.token);
+    }).then(_room => {
+      room = _room;
+      room.participants.forEach(participantConnected);
+      room.on('participantConnected', participantConnected);
+      room.on('participantDisconnected', participantDisconnected);
+      connected = true;
+      updateParticipantCount();
+      connectChat(data.token, data.conversation_sid);
+      resolve();
+    }).catch(e => {
+      console.log(e);
+      reject();
+    });
   });
-  const data = await response.json();
-  room = await Twilio.Video.connect(data.token);
-  room.participants.forEach(participantConnected);
-  room.on('participantConnected', participantConnected);
-  room.on('participantDisconnected', participantDisconnected);
-  connected = true;
-  updateParticipantCount();
+  return promise;
 };
 
 const updateParticipantCount = () => {
@@ -129,10 +139,20 @@ const trackUnsubscribed = (track) => {
 
 const disconnect = () => {
   room.disconnect();
+  if (chat) {
+    chat.shutdown().then(() => {
+      conv = null;
+      chat = null;
+    });
+  }
   while (container.lastChild.id != 'local') {
     container.removeChild(container.lastChild);
   }
   button.innerHTML = 'Join call';
+  if (root.classList.contains('withChat')) {
+    root.classList.remove('withChat');
+  }
+  toggleChat.disabled = true;
   connected = false;
   updateParticipantCount();
 };
@@ -160,49 +180,64 @@ const shareScreenHandler = () => {
 
 // Zoom Track Events for Screen Share
 const zoomTrack = (trackElement) => {
-  if (!trackElement.classList.contains('participantZoomed')) {
-    // Zoom in 
+  if (!trackElement.classList.contains('trackZoomed')) {
+    // zoom in
     container.childNodes.forEach(participant => {
-      if (participant.className == 'participant') {
+      if (participant.classList && participant.classList.contains('participant')) {
+        let zoomed = false;
         participant.childNodes[0].childNodes.forEach(track => {
           if (track === trackElement) {
-            track.classList.add('participantZoomed');
-          }
-          else {
-            track.classList.add('participantHidden');
+            track.classList.add('trackZoomed')
+            zoomed = true;
           }
         });
-        participant.childNodes[1].classList.add('participantHidden');
+        if (zoomed) {
+          participant.classList.add('participantZoomed');
+        }
+        else {
+          participant.classList.add('participantHidden');
+        }
       }
     });
   }
   else {
-    // Zoom out
+    // zoom out
     container.childNodes.forEach(participant => {
-      if (participant.className == 'participant') {
+      if (participant.classList && participant.classList.contains('participant')) {
         participant.childNodes[0].childNodes.forEach(track => {
           if (track === trackElement) {
-            track.classList.remove('participantZoomed');
-          }
-          else {
-            track.classList.remove('participantHidden');
+            track.classList.remove('trackZoomed');
           }
         });
-        participant.childNodes[1].classList.remove('participantHidden');
+        participant.classList.remove('participantZoomed')
+        participant.classList.remove('participantHidden')
       }
     });
   }
-}
+};
+
+// The media Controls
 
 const muteHandler = () => {
   event.preventDefault();
   try {
-    console.log(room.localParticipant);
-    room.localParticipant.audioTracks.forEach(track => {
-      track.track.disable();
-    });
-    muteAudio.value = "Muted";
-  }catch (e) {
+    if (muteAudio.value == 'enable') {
+      console.log(room.localParticipant);
+      room.localParticipant.audioTracks.forEach(track => {
+        track.track.disable();
+      });
+      muteAudio.value = "disable";
+      muteAudio.innerHTML = "unMute";
+    }
+    else {
+      console.log(room.localParticipant);
+      room.localParticipant.audioTracks.forEach(track => {
+        track.track.enable();
+      });
+      muteAudio.value = "enable";
+      muteAudio.innerHTML = "Mute";
+    }
+  } catch (e) {
     alert("Error: " + e.message);
   }
 };
@@ -210,14 +245,69 @@ const muteHandler = () => {
 const videoHandler = () => {
   event.preventDefault();
   try {
-    room.localParticipant.videoTracks.forEach(track => {
-      track.track.stop();
-      track.unpublish();
-    });
-  }catch (e) {
-    alert("Error: " + e.message); 
+    if (stopVideo.value == 'enable') {
+      room.localParticipant.videoTracks.forEach(track => {
+        track.track.disable();
+      });
+      stopVideo.value = "disable";
+      stopVideo.innerHTML = "Turn on";
+    }
+    else {
+      room.localParticipant.videoTracks.forEach(track => {
+        track.track.enable();
+      });
+      stopVideo.value = "enable";
+      stopVideo.innerHTML = "Turn off";
+    }
+  } catch (e) {
+    alert("Error: " + e.message);
   }
 }
+
+// Chat Function
+const connectChat = (token, conversation_sid) => {
+  return Twilio.Conversations.Client.create(token).then(_chat => {
+    chat = _chat;
+    return chat.getConversationBySid(conversation_sid).then((_conv) => {
+      conv = _conv;
+      conv.on('messageAdded', (message) => {
+        addMessageToChat(message.author, message.body);
+      });
+      return conv.getMessages().then((messages) => {
+        chatContent.innerHTML = '';
+        for (let i = 0; i < messages.items.length; i++) {
+          addMessageToChat(messages.items[i].author, messages.items[i].body);
+        }
+        toggleChat.disabled = false;
+      });
+    });
+  }).catch(e => {
+    console.log(e);
+  });
+};
+
+const addMessageToChat = (user, message) => {
+  chatContent.innerHTML += `<p><b>${user}</b>: ${message}`;
+  chatScroll.scrollTop = chatScroll.scrollHeight;
+};
+
+const toggleChatHandler = () => {
+  event.preventDefault();
+  if (root.classList.contains('withChat')) {
+    root.classList.remove('withChat');
+  }
+  else {
+    root.classList.add('withChat');
+    chatScroll.scrollTop = chatScroll.scrollHeight;
+  }
+};
+
+const onChatInputKey = (ev) => {
+  if (ev.keyCode == 13 && chatInput.value != '') {
+    conv.sendMessage(chatInput.value);
+    chatInput.value = '';
+  }
+};
 
 // Do this function 
 
@@ -226,3 +316,5 @@ button.addEventListener('click', connectButtonHandler);
 shareScreen.addEventListener('click', shareScreenHandler);
 muteAudio.addEventListener('click', muteHandler);
 stopVideo.addEventListener('click', videoHandler);
+toggleChat.addEventListener('click', toggleChatHandler);
+chatInput.addEventListener('keyup', onChatInputKey);
