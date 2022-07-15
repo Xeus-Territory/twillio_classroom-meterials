@@ -1,10 +1,10 @@
-from flask import Flask, render_template, request, abort
+from flask import Flask, jsonify, render_template, request, abort
 from flask_restful import Api
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 from twilio.jwt.access_token import AccessToken
-from twilio.jwt.access_token.grants import VideoGrant, ChatGrant
-from env import TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET
+from twilio.jwt.access_token.grants import VideoGrant, ChatGrant, SyncGrant
+from env import TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_SYNC_SERVICE_SID
 
 twillio_client = Client(TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_ACCOUNT_SID)
 
@@ -41,6 +41,20 @@ def login():
     
     return {'token': token.to_jwt(),
             'conversation_sid': conversation.sid}
+
+@app.route('/whiteboard')
+def whiteboard():
+    return render_template('whiteboard.html')
+
+@app.route('/token')
+def generate_token():
+    username = request.get_json(force=True).get('username')
+    if not username:
+        abort(401)
+    
+    token = AccessToken(TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, identity=username)
+    token.add_grant(SyncGrant(service_sid=TWILIO_SYNC_SERVICE_SID))
+    return jsonify(identity=username, token=token.to_jwt())
 
 if __name__ == '__main__':
     app.run(debug=True)

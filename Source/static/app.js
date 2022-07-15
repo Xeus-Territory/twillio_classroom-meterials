@@ -74,6 +74,7 @@ const connect = async (username) => {
       connected = true;
       updateParticipantCount();
       connectChat(data.token, data.conversation_sid);
+      openWhiteboard();
       resolve();
     }).catch(e => {
       console.log(e);
@@ -307,6 +308,11 @@ const onChatInputKey = (ev) => {
     conv.sendMessage(chatInput.value);
     chatInput.value = '';
   }
+};
+
+// Open Whiteboard in other window
+const openWhiteboard = () => {
+  window.open('whiteboard', '_blank');
 };
 
 // Do this function 
