@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+    <head>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
+        <script src="{{ url_for('static', filename='emoji_keyboard.js') }}"></script>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='emoji_keyboard.css') }}">
+    </head>
+    <body>
+        <h1>Flask & Twilio Video Conference</h1>
+        <form>
+            <label for="username">Name: </label>
+            <input type="text" name="username" id="username">
+            <button id="join_leave">Join call</button>
+            <button id="share_screen" disabled>Share screen</button>
+            <button id="mute-audio" value="enable">Mute</button>
+            <button id="stop-video" value="enable">Turn off</button>
+            <button id="toggle_chat" disabled>Toggle chat</button>
+        </form>
+        <p id="count">Disconnected.</p>
+        <div id="root">
+            <div id="container" class="container">
+                <div id="local" class="participant"><div></div><div class="label">Me</div></div>
+                <!-- more participants will be added dynamically here -->
+            </div>
+            <div id="chat">
+                <div id="chat-scroll">
+                    <div id="chat-content">
+                        <!-- chat content will be added dynamically here -->
+                    </div>
+                </div>
+                <button id="icon">❤️</button>
+                <input id="chat-input" type="text">
+            </div>
+        </div>
+        <script type="text/javascript">
+            const input = document.getElementById('chat-input');
+            var emojiKeyboard = new EmojiKeyboard;
+            emojiKeyboard.callback = (emoji, closed) => {
+                console.info(emoji, closed);
+                input.value += emoji.emoji;
+            };
+            emojiKeyboard.resizable = true;
+            emojiKeyboard.default_placeholder = "You are the best";
+            emojiKeyboard.instantiate(document.getElementById("icon"))
+        </script>
+        <script src="https://media.twiliocdn.com/sdk/js/video/releases/2.3.0/twilio-video.min.js"></script>
+        <script src="https://media.twiliocdn.com/sdk/js/conversations/releases/1.0.0/twilio-conversations.min.js"></script>
+        <script src="{{ url_for('static', filename='app.js') }}"></script>
+    </body>
+</html>
